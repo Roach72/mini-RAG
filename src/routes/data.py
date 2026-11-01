@@ -8,8 +8,10 @@ from models import ResponseSignal
 import logging 
 from .schemes.data import processRequest
 from models.ProjectModel import ProjectModel
-from models.db_schemes import DataChunk
+from models.db_schemes import DataChunk, Asset
+from models.AssetModel import AssetModel
 from models.ChunkModel import ChunkModel
+from models.enums.AssetTypeEnum import AssetType
 
 logger = logging.getLogger('uvicorn.error')
 
@@ -25,7 +27,7 @@ async def upload_data(request: Request, project_id: str, file: UploadFile,
                       app_settings: Settings = Depends(get_settings)):
 
 
-    project_model = ProjectModel(
+    project_model = await ProjectModel.create_instance(
         db_clint=request.app.db_clint
 
     )
@@ -67,11 +69,24 @@ async def upload_data(request: Request, project_id: str, file: UploadFile,
                 "signal": ResponseSignal.FILE_UPLOAD_FAILED.value
             }
         )
+    asset_model = await AssetModel.create_instance(
+        db_clint=request.app.db_clint
+    )
+
+    asset_resource = Asset(
+        asset_project_id=project.id,
+        asset_type=AssetType.FILE.value,
+        asset_name=file_id,
+        asset_size=os.path.getsize(file_path)
+
+    )
+
+    asset_record = await asset_model.create_asset(asset=asset_resource)
     
     return JSONResponse(
             content={
                 "signal":ResponseSignal.FILE_UPLOAD_SUCCESS.value,
-                "file id": file_id,
+                "file id": str(asset_record.id),
             }
         )
 
@@ -83,7 +98,7 @@ async def process_endpoint(request: Request, project_id: str, process_request: p
     overlap_size = process_request.overlap_size
     do_reset     = process_request.do_reset
 
-    project_model = ProjectModel(
+    project_model = await ProjectModel.create_instance(
         db_clint=request.app.db_clint
 
     )
@@ -126,7 +141,7 @@ async def process_endpoint(request: Request, project_id: str, process_request: p
     ]
 
 
-    chunk_model = ChunkModel(
+    chunk_model = await ChunkModel.create_instance(
         db_clint=request.app.db_clint
     )
 
